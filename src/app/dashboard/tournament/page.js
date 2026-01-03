@@ -26,6 +26,7 @@ export default function TournamentPage() {
   const [claimNotes, setClaimNotes] = useState({});
 
   const [formData, setFormData] = useState({
+    tournament_title: '',
     total_allowed_entries: 3,
     tournament_main_banner: '',
     tournament_start_time: '',
@@ -148,7 +149,9 @@ export default function TournamentPage() {
         return;
       }
 
+      const titleValue = (formData.tournament_title || '').trim();
       const insertData = {
+        tournament_title: titleValue.length > 0 ? titleValue : null,
         total_allowed_entries: formData.total_allowed_entries,
         tournament_main_banner: formData.tournament_main_banner || null,
         tournament_entries: 0,
@@ -217,26 +220,33 @@ export default function TournamentPage() {
     if (!tournamentData) return;
     
     setFormData({
+      tournament_title: tournamentData.tournament_title || '',
       total_allowed_entries: tournamentData.total_allowed_entries || 3,
       tournament_main_banner: tournamentData.tournament_main_banner || '',
       tournament_start_time: tournamentData.tournament_start_time ? 
-        tournamentData.tournament_start_time.replace(/[+-]\d{2}:\d{2}$/, '').slice(0, 16) : '',
+        tournamentData.tournament_start_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '').slice(0, 16) : '',
       tournament_end_time: tournamentData.tournament_end_time ? 
-        tournamentData.tournament_end_time.replace(/[+-]\d{2}:\d{2}$/, '').slice(0, 16) : '',
+        tournamentData.tournament_end_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '').slice(0, 16) : '',
       tournament_result_time: tournamentData.tournament_result_time ? 
-        tournamentData.tournament_result_time.replace(/[+-]\d{2}:\d{2}$/, '').slice(0, 16) : ''
+        tournamentData.tournament_result_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '').slice(0, 16) : ''
     });
     setShowEditModal(true);
   };
 
   const resetForm = () => {
     setFormData({
+      tournament_title: '',
       total_allowed_entries: 3,
       tournament_main_banner: '',
       tournament_start_time: '',
       tournament_end_time: '',
       tournament_result_time: ''
     });
+  };
+
+  const stripTimezone = (dateString) => {
+    if (!dateString) return '';
+    return dateString.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '');
   };
 
   const getTournamentStatus = (tournamentData = tournament) => {
@@ -249,13 +259,13 @@ export default function TournamentPage() {
     ) {
       return 'Draft';
     }
-    
+
     const now = new Date();
     // Parse times as local by removing timezone info
-    const startTime = new Date(tournamentData.tournament_start_time.replace(/[+-]\d{2}:\d{2}$/, ''));
-    const endTime = new Date(tournamentData.tournament_end_time.replace(/[+-]\d{2}:\d{2}$/, ''));
-    const resultTime = new Date(tournamentData.tournament_result_time.replace(/[+-]\d{2}:\d{2}$/, ''));
-    
+    const startTime = new Date(stripTimezone(tournamentData.tournament_start_time));
+    const endTime = new Date(stripTimezone(tournamentData.tournament_end_time));
+    const resultTime = new Date(stripTimezone(tournamentData.tournament_result_time));
+
     if (now < startTime) return 'Upcoming';
     if (now >= startTime && now < endTime) return 'Active';
     if (now >= endTime && now < resultTime) return 'Ended';
@@ -276,7 +286,7 @@ export default function TournamentPage() {
   const formatDateTime = (dateString) => {
     if (!dateString) return '-';
     // Parse as local time by removing timezone info
-    const cleanDateString = dateString.replace(/[+-]\d{2}:\d{2}$/, '');
+    const cleanDateString = stripTimezone(dateString);
     return new Date(cleanDateString).toLocaleString();
   };
 
@@ -285,7 +295,7 @@ export default function TournamentPage() {
       alert('No leaderboard data to export');
       return;
     }
-    
+
     const headers = ['Rank', 'Player Name', 'Player UID', 'Entries', 'Score'];
     const rows = leaderboard.map(p => [
       p.rank || '-',
@@ -294,7 +304,7 @@ export default function TournamentPage() {
       p.entries || 0,
       p.score || 0
     ]);
-    
+
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -414,7 +424,7 @@ export default function TournamentPage() {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                 </svg>
                 Reward Claims
               </button>
@@ -474,6 +484,86 @@ export default function TournamentPage() {
         </div>
       </div>
 
+      {/* Tournament List */}
+      {!loading && tournaments.length > 0 && (
+        <div className="bg-gray-800 rounded-xl border border-gray-700 mb-6 overflow-hidden">
+          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">All Tournaments</h2>
+            <button
+              onClick={fetchTournament}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm"
+            >
+              Refresh
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-700/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Title</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Start</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">End</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Created</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {tournaments.map((t) => {
+                  const status = getTournamentStatus(t);
+                  const isSelected = tournament?.id === t.id;
+                  const title = t.tournament_title || `Tournament #${t.id}`;
+
+                  return (
+                    <tr
+                      key={t.id}
+                      className={`hover:bg-gray-700/30 ${isSelected ? 'bg-gray-700/40' : ''}`}
+                    >
+                      <td className="px-4 py-4">
+                        <p className="text-white font-medium">{title}</p>
+                        <p className="text-gray-500 text-xs">ID: {t.id}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(status)}`}
+                        >
+                          {status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-gray-300">{formatDateTime(t.tournament_start_time)}</td>
+                      <td className="px-4 py-4 text-gray-300">{formatDateTime(t.tournament_end_time)}</td>
+                      <td className="px-4 py-4 text-gray-300">{formatDateTime(t.created_at)}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleSelectTournament(t)}
+                            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => openEditModal(t)}
+                            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(t)}
+                            className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Tournament Card */}
       {loading ? (
         <div className="bg-gray-800 rounded-xl p-8 text-center border border-gray-700">
@@ -491,7 +581,9 @@ export default function TournamentPage() {
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white">Active Tournament</h2>
+                  <h2 className="text-xl font-bold text-white">
+                    {tournament.tournament_title || 'Tournament'}
+                  </h2>
                   <p className="text-gray-400">ID: {tournament.id}</p>
                 </div>
               </div>
@@ -582,6 +674,19 @@ export default function TournamentPage() {
             </h3>
             
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Tournament Title
+                </label>
+                <input
+                  type="text"
+                  value={formData.tournament_title}
+                  onChange={(e) => setFormData({ ...formData, tournament_title: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="e.g. Weekend Championship"
+                />
+              </div>
+
               {/* Allowed Entries */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
