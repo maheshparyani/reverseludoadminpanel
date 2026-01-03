@@ -142,21 +142,6 @@ export default function TournamentPage() {
     if (url) setFormData(prev => ({ ...prev, tournament_main_banner: url }));
   };
 
-  const toDatetimeLocalValue = (dateString) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    if (Number.isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
-  const toIsoFromDatetimeLocal = (value) => {
-    if (!value) return null;
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toISOString();
-  };
-
   const handleCreate = async () => {
     try {
       if (!formData.tournament_start_time || !formData.tournament_end_time || !formData.tournament_result_time) {
@@ -170,9 +155,9 @@ export default function TournamentPage() {
         total_allowed_entries: formData.total_allowed_entries,
         tournament_main_banner: formData.tournament_main_banner || null,
         tournament_entries: 0,
-        tournament_start_time: toIsoFromDatetimeLocal(formData.tournament_start_time),
-        tournament_end_time: toIsoFromDatetimeLocal(formData.tournament_end_time),
-        tournament_result_time: toIsoFromDatetimeLocal(formData.tournament_result_time)
+        tournament_start_time: formData.tournament_start_time,
+        tournament_end_time: formData.tournament_end_time,
+        tournament_result_time: formData.tournament_result_time
       };
       
       const { data, error } = await supabase
@@ -195,19 +180,9 @@ export default function TournamentPage() {
   const handleUpdate = async () => {
     if (!tournament) return;
     try {
-      const titleValue = (formData.tournament_title || '').trim();
-      const patch = {
-        tournament_title: titleValue.length > 0 ? titleValue : null,
-        total_allowed_entries: formData.total_allowed_entries,
-        tournament_main_banner: formData.tournament_main_banner || null,
-        tournament_start_time: toIsoFromDatetimeLocal(formData.tournament_start_time),
-        tournament_end_time: toIsoFromDatetimeLocal(formData.tournament_end_time),
-        tournament_result_time: toIsoFromDatetimeLocal(formData.tournament_result_time),
-      };
-
       const { error } = await supabase
         .from('tournament')
-        .update(patch)
+        .update(formData)
         .eq('id', tournament.id);
       
       if (error) throw error;
@@ -249,11 +224,11 @@ export default function TournamentPage() {
       total_allowed_entries: tournamentData.total_allowed_entries || 3,
       tournament_main_banner: tournamentData.tournament_main_banner || '',
       tournament_start_time: tournamentData.tournament_start_time ? 
-        toDatetimeLocalValue(tournamentData.tournament_start_time) : '',
+        tournamentData.tournament_start_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '').slice(0, 16) : '',
       tournament_end_time: tournamentData.tournament_end_time ? 
-        toDatetimeLocalValue(tournamentData.tournament_end_time) : '',
+        tournamentData.tournament_end_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '').slice(0, 16) : '',
       tournament_result_time: tournamentData.tournament_result_time ? 
-        toDatetimeLocalValue(tournamentData.tournament_result_time) : ''
+        tournamentData.tournament_result_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '').slice(0, 16) : ''
     });
     setShowEditModal(true);
   };
@@ -281,9 +256,10 @@ export default function TournamentPage() {
     }
 
     const now = new Date();
-    const startTime = new Date(tournamentData.tournament_start_time);
-    const endTime = new Date(tournamentData.tournament_end_time);
-    const resultTime = new Date(tournamentData.tournament_result_time);
+    // Parse times as local by removing timezone info
+    const startTime = new Date(tournamentData.tournament_start_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, ''));
+    const endTime = new Date(tournamentData.tournament_end_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, ''));
+    const resultTime = new Date(tournamentData.tournament_result_time.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, ''));
 
     if (now < startTime) return 'Upcoming';
     if (now >= startTime && now < endTime) return 'Active';
@@ -291,22 +267,11 @@ export default function TournamentPage() {
     return 'Results Out';
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Upcoming': return 'bg-blue-500/20 text-blue-400';
-      case 'Active': return 'bg-green-500/20 text-green-400';
-      case 'Ended': return 'bg-yellow-500/20 text-yellow-400';
-      case 'Results Out': return 'bg-purple-500/20 text-purple-400';
-      case 'Draft': return 'bg-gray-500/20 text-gray-300';
-      default: return 'bg-gray-500/20 text-gray-400';
-    }
-  };
-
   const formatDateTime = (dateString) => {
     if (!dateString) return '-';
-    const d = new Date(dateString);
-    if (Number.isNaN(d.getTime())) return '-';
-    return d.toLocaleString();
+    // Parse as local time by removing timezone info
+    const cleanDateString = dateString.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '');
+    return new Date(cleanDateString).toLocaleString();
   };
 
   const exportLeaderboardCSV = () => {
