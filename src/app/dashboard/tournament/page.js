@@ -106,6 +106,23 @@ export default function TournamentPage() {
     setStats({ totalEntries, totalPlayers, avgScore, topScore });
   };
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Draft':
+        return 'bg-gray-500/20 text-gray-300';
+      case 'Upcoming':
+        return 'bg-blue-500/20 text-blue-400';
+      case 'Active':
+        return 'bg-green-500/20 text-green-400';
+      case 'Ended':
+        return 'bg-yellow-500/20 text-yellow-400';
+      case 'Results Out':
+        return 'bg-purple-500/20 text-purple-400';
+      default:
+        return 'bg-gray-500/20 text-gray-300';
+    }
+  };
+
   const uploadBanner = async (file) => {
     if (!file) return null;
     
