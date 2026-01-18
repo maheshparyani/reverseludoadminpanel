@@ -327,14 +327,17 @@ export default function TournamentPage() {
     if (!tournamentId) return;
     setClaimsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('tournament_reward_claims')
-        .select('*')
-        .eq('tournament_id', tournamentId)
-        .order('created_at', { ascending: false });
+      const res = await fetch(
+        `/api/tournament-reward-claims?tournamentId=${encodeURIComponent(
+          tournamentId,
+        )}`,
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error || 'Failed to fetch reward claims');
+      }
 
-      if (error) throw error;
-      setRewardClaims(data || []);
+      setRewardClaims(json?.rewardClaims || []);
     } catch (err) {
       console.error('Error fetching reward claims:', err);
       alert('Error fetching reward claims: ' + err.message);
@@ -379,12 +382,20 @@ export default function TournamentPage() {
         patch.admin_note = note.length > 0 ? note : null;
       }
 
-      const { error } = await supabase
-        .from('tournament_reward_claims')
-        .update(patch)
-        .eq('id', claimId);
-
-      if (error) throw error;
+      const res = await fetch('/api/tournament-reward-claims', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          claimId,
+          ...patch,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error || 'Failed to update claim status');
+      }
       await fetchRewardClaims(tournament.id);
     } catch (err) {
       console.error('Error updating claim status:', err);
