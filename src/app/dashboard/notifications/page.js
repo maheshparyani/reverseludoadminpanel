@@ -51,23 +51,40 @@ export default function NotificationsPage() {
         return;
       }
 
+      const res = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          message: formData.message,
+          type: formData.type,
+          target_users: targetUsers,
+          tournament_id: formData.tournament_id || null,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result?.error || 'Error sending notification');
+      }
+
       // Store notification record
       const notification = {
         title: formData.title,
         message: formData.message,
         type: formData.type,
-        target_count: targetUsers.length,
+        target_count: result?.sent_to ?? targetUsers.length,
         sent_at: new Date().toISOString()
       };
       setSentNotifications([notification, ...sentNotifications]);
       
-      alert(`Notification sent to ${targetUsers.length} users!`);
+      alert(`Notification sent to ${notification.target_count} users!`);
       setShowModal(false);
       setFormData({ title: '', message: '', type: 'general', tournament_id: '' });
       setSelectedUsers([]);
     } catch (err) {
       console.error('Error sending notification:', err);
-      alert('Error sending notification');
+      alert(err?.message || 'Error sending notification');
     } finally {
       setLoading(false);
     }
