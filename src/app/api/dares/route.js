@@ -32,17 +32,34 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { dare_text, category, is_active } = body;
+    const { dare_text, category, is_active, style } = body;
     
     if (!dare_text?.trim()) {
       return NextResponse.json({ error: 'Dare text is required' }, { status: 400 });
     }
-    
-    const { data, error } = await supabaseAdmin
+
+    const payload = { dare_text: dare_text.trim(), category, is_active };
+    if (style && typeof style === 'object') {
+      payload.style = {
+        bold: style.bold === true,
+        italic: style.italic === true,
+        underline: style.underline === true,
+      };
+    }
+
+    let { data, error } = await supabaseAdmin
       .from('dares')
-      .insert([{ dare_text: dare_text.trim(), category, is_active }])
+      .insert([payload])
       .select();
-    
+
+    if (error && payload.style && /column .*style/i.test(error.message || '')) {
+      delete payload.style;
+      ({ data, error } = await supabaseAdmin
+        .from('dares')
+        .insert([payload])
+        .select());
+    }
+
     if (error) throw error;
     return NextResponse.json(data[0]);
   } catch (err) {
@@ -54,18 +71,36 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { id, dare_text, category, is_active } = body;
+    const { id, dare_text, category, is_active, style } = body;
     
     if (!id) {
       return NextResponse.json({ error: 'Dare ID is required' }, { status: 400 });
     }
-    
-    const { data, error } = await supabaseAdmin
+
+    const payload = { dare_text: dare_text?.trim(), category, is_active };
+    if (style && typeof style === 'object') {
+      payload.style = {
+        bold: style.bold === true,
+        italic: style.italic === true,
+        underline: style.underline === true,
+      };
+    }
+
+    let { data, error } = await supabaseAdmin
       .from('dares')
-      .update({ dare_text: dare_text?.trim(), category, is_active })
+      .update(payload)
       .eq('id', id)
       .select();
-    
+
+    if (error && payload.style && /column .*style/i.test(error.message || '')) {
+      delete payload.style;
+      ({ data, error } = await supabaseAdmin
+        .from('dares')
+        .update(payload)
+        .eq('id', id)
+        .select());
+    }
+
     if (error) throw error;
     return NextResponse.json(data[0]);
   } catch (err) {

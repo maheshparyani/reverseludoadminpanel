@@ -15,7 +15,8 @@ export default function DaresPage() {
   const [formData, setFormData] = useState({
     dare_text: '',
     category: 'casual',
-    is_active: true
+    is_active: true,
+    style: { bold: false, italic: false, underline: false }
   });
 
   const categories = ['casual', 'funny', 'love'];
@@ -75,7 +76,8 @@ export default function DaresPage() {
         body: JSON.stringify({
           dare_text: formData.dare_text.trim(),
           category: formData.category,
-          is_active: formData.is_active
+          is_active: formData.is_active,
+          style: formData.style
         })
       });
       const data = await res.json();
@@ -99,7 +101,8 @@ export default function DaresPage() {
           id: selectedDare.id,
           dare_text: formData.dare_text.trim(),
           category: formData.category,
-          is_active: formData.is_active
+          is_active: formData.is_active,
+          style: formData.style
         })
       });
       const data = await res.json();
@@ -149,14 +152,43 @@ export default function DaresPage() {
     setFormData({
       dare_text: dare.dare_text || '',
       category: dare.category || 'casual',
-      is_active: dare.is_active ?? true
+      is_active: dare.is_active ?? true,
+      style: {
+        bold: dare?.style?.bold === true,
+        italic: dare?.style?.italic === true,
+        underline: dare?.style?.underline === true,
+      }
     });
     setShowEditModal(true);
   };
 
   const resetForm = () => {
-    setFormData({ dare_text: '', category: 'casual', is_active: true });
+    setFormData({
+      dare_text: '',
+      category: 'casual',
+      is_active: true,
+      style: { bold: false, italic: false, underline: false }
+    });
     setSelectedDare(null);
+  };
+
+  const toggleStyleFlag = (key) => {
+    setFormData(prev => ({
+      ...prev,
+      style: {
+        ...(prev.style || { bold: false, italic: false, underline: false }),
+        [key]: !(prev.style?.[key] === true)
+      }
+    }));
+  };
+
+  const getTextStyleClass = (style) => {
+    if (!style) return '';
+    const parts = [];
+    if (style.bold) parts.push('font-bold');
+    if (style.italic) parts.push('italic');
+    if (style.underline) parts.push('underline');
+    return parts.join(' ');
   };
 
   const getCategoryColor = (category) => {
@@ -269,7 +301,7 @@ export default function DaresPage() {
                 {filterDares().map((dare) => (
                   <tr key={dare.id} className="hover:bg-gray-700/30">
                     <td className="px-4 py-4">
-                      <p className="text-white max-w-xl">{dare.dare_text}</p>
+                      <p className={`text-white max-w-xl ${getTextStyleClass(dare.style)}`}>{dare.dare_text}</p>
                     </td>
                     <td className="px-4 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(dare.category)}`}>
@@ -341,6 +373,49 @@ export default function DaresPage() {
                   className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500 resize-none" 
                   placeholder="Enter the dare text..."
                 />
+              </div>
+
+              {/* Style */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Text Style</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleStyleFlag('bold')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      formData.style?.bold
+                        ? 'bg-gray-600 text-white border-gray-500'
+                        : 'bg-gray-700 text-gray-300 border-gray-600 hover:text-white'
+                    }`}
+                    title="Bold"
+                  >
+                    <span className="font-bold">B</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleStyleFlag('italic')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      formData.style?.italic
+                        ? 'bg-gray-600 text-white border-gray-500'
+                        : 'bg-gray-700 text-gray-300 border-gray-600 hover:text-white'
+                    }`}
+                    title="Italic"
+                  >
+                    <span className="italic">I</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleStyleFlag('underline')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      formData.style?.underline
+                        ? 'bg-gray-600 text-white border-gray-500'
+                        : 'bg-gray-700 text-gray-300 border-gray-600 hover:text-white'
+                    }`}
+                    title="Underline"
+                  >
+                    <span className="underline">U</span>
+                  </button>
+                </div>
               </div>
               
               {/* Category */}
