@@ -7,7 +7,7 @@ export default function NotificationsPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [notificationType, setNotificationType] = useState('all');
+  const [notificationType, setNotificationType] = useState('tournament');
   const [formData, setFormData] = useState({ title: '', message: '', type: 'general', tournament_id: '' });
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
@@ -81,12 +81,15 @@ export default function NotificationsPage() {
     setLoading(true);
     try {
       let targetUsers = [];
-      if (notificationType === 'all') {
-        targetUsers = users.map(u => u.uid || u.id).filter(Boolean);
-      } else if (notificationType === 'tournament' && formData.tournament_id) {
+      if (notificationType === 'tournament' && formData.tournament_id) {
         targetUsers = selectedTournamentUsers.filter(Boolean);
       } else if (notificationType === 'selected') {
         targetUsers = selectedUsers;
+      } else if (notificationType === 'all') {
+        // Legacy fallback: UI no longer allows this.
+        alert('All Users notifications are disabled. Please choose Tournament Players or Select Users.');
+        setLoading(false);
+        return;
       }
 
       if (targetUsers.length === 0) {
@@ -245,10 +248,10 @@ export default function NotificationsPage() {
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-300 mb-2">Send To</label>
               <div className="flex space-x-2">
-                {['all', 'tournament', 'selected'].map(type => (
+                {['tournament', 'selected'].map(type => (
                   <button key={type} onClick={() => setNotificationType(type)}
                     className={`px-4 py-2 rounded-lg text-sm ${notificationType === type ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                    {type === 'all' ? 'All Users' : type === 'tournament' ? 'Tournament Players' : 'Select Users'}
+                    {type === 'tournament' ? 'Tournament Players' : 'Select Users'}
                   </button>
                 ))}
               </div>

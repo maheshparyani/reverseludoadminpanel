@@ -49,8 +49,14 @@ export async function POST(request) {
     }));
 
     if (notifications.length > 0) {
+      // This table may not exist in some deployments; mailbox delivery is the real feature.
       const { error } = await supabase.from('notifications').insert(notifications);
-      if (error) throw error;
+      if (error) {
+        const msg = String(error?.message || '');
+        const code = String(error?.code || '');
+        const tableMissing = code === '42P01' || msg.toLowerCase().includes('could not find the table');
+        if (!tableMissing) throw error;
+      }
     }
 
     // Deliver to in-game mailbox (Flutter app reads users.mailbox)
