@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function NotificationsPage() {
   const [tournaments, setTournaments] = useState([]);
@@ -11,20 +10,66 @@ export default function NotificationsPage() {
   const [notificationType, setNotificationType] = useState('all');
   const [formData, setFormData] = useState({ title: '', message: '', type: 'general', tournament_id: '' });
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
+
+  const [tournamentPlayers, setTournamentPlayers] = useState([]);
+  const [tournamentPlayersLoading, setTournamentPlayersLoading] = useState(false);
+  const [tournamentPlayerSearch, setTournamentPlayerSearch] = useState('');
+  const [selectedTournamentUsers, setSelectedTournamentUsers] = useState([]);
   const [sentNotifications, setSentNotifications] = useState([]);
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
-      const [tourneysRes, usersRes] = await Promise.all([
-        supabase.from('tournaments').select('tournament_id, tournament_name').order('created_at', { ascending: false }),
-        supabase.from('users').select('uid, username, email')
+      const [tournamentsRes, usersRes] = await Promise.all([
+        fetch('/api/tournaments'),
+        fetch('/api/users'),
       ]);
-      setTournaments(tourneysRes.data || []);
-      setUsers(usersRes.data || []);
+
+      const tournamentsJson = await tournamentsRes.json();
+      if (!tournamentsRes.ok) {
+        throw new Error(tournamentsJson?.error || 'Failed to load tournaments');
+      }
+
+      const usersJson = await usersRes.json();
+      if (!usersRes.ok) {
+        throw new Error(usersJson?.error || 'Failed to load users');
+      }
+
+      setTournaments(tournamentsJson?.tournaments || []);
+      setUsers(usersJson?.users || []);
     } catch (err) {
       console.error('Error fetching data:', err);
+    }
+  };
+
+  const loadTournamentPlayers = async (tournamentId) => {
+    if (!tournamentId) {
+      setTournamentPlayers([]);
+      setSelectedTournamentUsers([]);
+      return;
+    }
+
+    setTournamentPlayersLoading(true);
+    try {
+      const res = await fetch(
+        `/api/tournaments?players=1&tournamentId=${encodeURIComponent(tournamentId)}`,
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.error || 'Failed to load tournament players');
+      }
+
+      const players = json?.players || [];
+      setTournamentPlayers(players);
+      setSelectedTournamentUsers(players.map((p) => p.player_uid));
+    } catch (err) {
+      console.error('Error loading tournament players:', err);
+      setTournamentPlayers([]);
+      setSelectedTournamentUsers([]);
+    } finally {
+      setTournamentPlayersLoading(false);
     }
   };
 
@@ -37,10 +82,9 @@ export default function NotificationsPage() {
     try {
       let targetUsers = [];
       if (notificationType === 'all') {
-        targetUsers = users.map(u => u.uid);
+        targetUsers = users.map(u => u.uid || u.id).filter(Boolean);
       } else if (notificationType === 'tournament' && formData.tournament_id) {
-        const { data } = await supabase.from('tournaments').select('registered_players').eq('tournament_id', formData.tournament_id).single();
-        targetUsers = data?.registered_players || [];
+        targetUsers = selectedTournamentUsers.filter(Boolean);
       } else if (notificationType === 'selected') {
         targetUsers = selectedUsers;
       }
@@ -82,6 +126,10 @@ export default function NotificationsPage() {
       setShowModal(false);
       setFormData({ title: '', message: '', type: 'general', tournament_id: '' });
       setSelectedUsers([]);
+      setUserSearch('');
+      setTournamentPlayers([]);
+      setSelectedTournamentUsers([]);
+      setTournamentPlayerSearch('');
     } catch (err) {
       console.error('Error sending notification:', err);
       alert(err?.message || 'Error sending notification');
@@ -89,6 +137,23 @@ export default function NotificationsPage() {
       setLoading(false);
     }
   };
+
+  const filteredUsers = users.filter((u) => {
+    const q = (userSearch || '').trim().toLowerCase();
+    if (!q) return true;
+    const uid = (u.uid || u.id || '').toString().toLowerCase();
+    const username = (u.username || '').toString().toLowerCase();
+    const email = (u.email || '').toString().toLowerCase();
+    return uid.includes(q) || username.includes(q) || email.includes(q);
+  });
+
+  const filteredTournamentPlayers = tournamentPlayers.filter((p) => {
+    const q = (tournamentPlayerSearch || '').trim().toLowerCase();
+    if (!q) return true;
+    const uid = (p.player_uid || '').toString().toLowerCase();
+    const name = (p.player_name || '').toString().toLowerCase();
+    return uid.includes(q) || name.includes(q);
+  });
 
   const notificationTemplates = [
     { title: 'New Tournament!', message: 'A new tournament is starting soon. Join now to win amazing prizes!', type: 'tournament' },
@@ -193,11 +258,74 @@ export default function NotificationsPage() {
             {notificationType === 'tournament' && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-300 mb-2">Select Tournament</label>
-                <select value={formData.tournament_id} onChange={(e) => setFormData({ ...formData, tournament_id: e.target.value })}
+                <select value={formData.tournament_id} onChange={(e) => {
+                  const nextId = e.target.value;
+                  setFormData({ ...formData, tournament_id: nextId });
+                  loadTournamentPlayers(nextId);
+                }}
                   className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white">
                   <option value="">Select a tournament</option>
-                  {tournaments.map(t => <option key={t.tournament_id} value={t.tournament_id}>{t.tournament_name}</option>)}
+                  {tournaments.map(t => <option key={t.id} value={t.id}>{t.tournament_title || `Tournament #${t.id}`}</option>)}
                 </select>
+
+                {formData.tournament_id && (
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Tournament Players (from leaderboard)
+                    </label>
+                    <input
+                      type="text"
+                      value={tournamentPlayerSearch}
+                      onChange={(e) => setTournamentPlayerSearch(e.target.value)}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white mb-2"
+                      placeholder="Search by player UID or name"
+                    />
+
+                    {tournamentPlayersLoading ? (
+                      <div className="text-gray-400 text-sm">Loading players...</div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-gray-400 text-xs">
+                            {selectedTournamentUsers.length} selected
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTournamentUsers(tournamentPlayers.map((p) => p.player_uid))}
+                            className="text-xs text-purple-400 hover:text-purple-300"
+                          >
+                            Select all
+                          </button>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto bg-gray-700/50 rounded-lg p-2">
+                          {filteredTournamentPlayers.map((p) => (
+                            <label key={p.player_uid} className="flex items-center p-2 hover:bg-gray-700 rounded cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedTournamentUsers.includes(p.player_uid)}
+                                onChange={(e) => setSelectedTournamentUsers(
+                                  e.target.checked
+                                    ? [...selectedTournamentUsers, p.player_uid]
+                                    : selectedTournamentUsers.filter((id) => id !== p.player_uid)
+                                )}
+                                className="mr-3"
+                              />
+                              <span className="text-white">
+                                {p.player_name || p.player_uid}
+                              </span>
+                              <span className="text-gray-500 text-xs ml-2">
+                                {p.player_uid?.slice(0, 10)}
+                              </span>
+                            </label>
+                          ))}
+                          {filteredTournamentPlayers.length === 0 && (
+                            <div className="p-2 text-gray-500 text-sm">No players found</div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -205,15 +333,29 @@ export default function NotificationsPage() {
             {notificationType === 'selected' && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-300 mb-2">Select Users ({selectedUsers.length} selected)</label>
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white mb-2"
+                  placeholder="Search by UID, username, or email"
+                />
                 <div className="max-h-40 overflow-y-auto bg-gray-700/50 rounded-lg p-2">
-                  {users.map(u => (
-                    <label key={u.uid} className="flex items-center p-2 hover:bg-gray-700 rounded cursor-pointer">
-                      <input type="checkbox" checked={selectedUsers.includes(u.uid)}
-                        onChange={(e) => setSelectedUsers(e.target.checked ? [...selectedUsers, u.uid] : selectedUsers.filter(id => id !== u.uid))}
-                        className="mr-3" />
-                      <span className="text-white">{u.username || u.email || u.uid.slice(0, 8)}</span>
-                    </label>
-                  ))}
+                  {filteredUsers.map(u => {
+                    const uid = u.uid || u.id;
+                    return (
+                      <label key={uid} className="flex items-center p-2 hover:bg-gray-700 rounded cursor-pointer">
+                        <input type="checkbox" checked={selectedUsers.includes(uid)}
+                          onChange={(e) => setSelectedUsers(e.target.checked ? [...selectedUsers, uid] : selectedUsers.filter(id => id !== uid))}
+                          className="mr-3" />
+                        <span className="text-white">{u.username || u.email || uid?.slice(0, 8)}</span>
+                        <span className="text-gray-500 text-xs ml-2">{uid?.slice(0, 10)}</span>
+                      </label>
+                    );
+                  })}
+                  {filteredUsers.length === 0 && (
+                    <div className="p-2 text-gray-500 text-sm">No users found</div>
+                  )}
                 </div>
               </div>
             )}
