@@ -10,16 +10,23 @@ export default function DaresPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedDare, setSelectedDare] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [stats, setStats] = useState({ total: 0, casual: 0, funny: 0, love: 0, active: 0, inactive: 0 });
+  const [stats, setStats] = useState({ total: 0, casual: 0, funny: 0, romantic: 0, train_bus: 0, active: 0, inactive: 0 });
 
   const [formData, setFormData] = useState({
     dare_text: '',
     category: 'casual',
     is_active: true,
+    font: 'default',
     style: { bold: false, italic: false, underline: false }
   });
 
-  const categories = ['casual', 'funny', 'love'];
+  const categories = ['casual', 'funny', 'romantic', 'train_bus'];
+  const fonts = [
+    { value: 'default', label: 'Default' },
+    { value: 'cursive', label: 'Cursive' },
+    { value: 'serif', label: 'Serif' },
+    { value: 'mono', label: 'Mono' },
+  ];
 
   useEffect(() => { fetchDares(); }, []);
 
@@ -39,11 +46,12 @@ export default function DaresPage() {
   };
 
   const calculateStats = (data) => {
-    const s = { total: data.length, casual: 0, funny: 0, love: 0, active: 0, inactive: 0 };
+    const s = { total: data.length, casual: 0, funny: 0, romantic: 0, train_bus: 0, active: 0, inactive: 0 };
     data.forEach(d => {
       if (d.category === 'casual') s.casual++;
       else if (d.category === 'funny') s.funny++;
-      else if (d.category === 'love') s.love++;
+      else if (d.category === 'romantic' || d.category === 'love') s.romantic++;
+      else if (d.category === 'train_bus') s.train_bus++;
       if (d.is_active) s.active++;
       else s.inactive++;
     });
@@ -53,7 +61,11 @@ export default function DaresPage() {
   const filterDares = () => {
     let filtered = dares;
     if (activeCategory !== 'all') {
-      filtered = filtered.filter(d => d.category === activeCategory);
+      if (activeCategory === 'romantic') {
+        filtered = filtered.filter(d => d.category === 'romantic' || d.category === 'love');
+      } else {
+        filtered = filtered.filter(d => d.category === activeCategory);
+      }
     }
     if (searchTerm) {
       filtered = filtered.filter(d => 
@@ -77,6 +89,7 @@ export default function DaresPage() {
           dare_text: formData.dare_text.trim(),
           category: formData.category,
           is_active: formData.is_active,
+          font: formData.font,
           style: formData.style
         })
       });
@@ -102,6 +115,7 @@ export default function DaresPage() {
           dare_text: formData.dare_text.trim(),
           category: formData.category,
           is_active: formData.is_active,
+          font: formData.font,
           style: formData.style
         })
       });
@@ -151,8 +165,9 @@ export default function DaresPage() {
     setSelectedDare(dare);
     setFormData({
       dare_text: dare.dare_text || '',
-      category: dare.category || 'casual',
+      category: (dare.category === 'love' ? 'romantic' : (dare.category || 'casual')),
       is_active: dare.is_active ?? true,
+      font: dare.font || 'default',
       style: {
         bold: dare?.style?.bold === true,
         italic: dare?.style?.italic === true,
@@ -167,6 +182,7 @@ export default function DaresPage() {
       dare_text: '',
       category: 'casual',
       is_active: true,
+      font: 'default',
       style: { bold: false, italic: false, underline: false }
     });
     setSelectedDare(null);
@@ -182,6 +198,21 @@ export default function DaresPage() {
     }));
   };
 
+  const formatCategoryLabel = (category) => {
+    const normalized = category === 'love' ? 'romantic' : category;
+    if (normalized === 'train_bus') return 'Train/Bus';
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
+
+  const getFontFamily = (font) => {
+    switch (font) {
+      case 'cursive': return 'cursive';
+      case 'serif': return 'serif';
+      case 'mono': return 'monospace';
+      default: return undefined;
+    }
+  };
+
   const getTextStyleClass = (style) => {
     if (!style) return '';
     const parts = [];
@@ -195,7 +226,11 @@ export default function DaresPage() {
     switch (category) {
       case 'casual': return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
       case 'funny': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
-      case 'love': return 'bg-pink-500/20 text-pink-400 border-pink-500/50';
+      case 'romantic':
+      case 'love':
+        return 'bg-pink-500/20 text-pink-400 border-pink-500/50';
+      case 'train_bus':
+        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50';
       default: return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
     }
   };
@@ -204,7 +239,11 @@ export default function DaresPage() {
     switch (category) {
       case 'casual': return '🎯';
       case 'funny': return '😂';
-      case 'love': return '❤️';
+      case 'romantic':
+      case 'love':
+        return '❤️';
+      case 'train_bus':
+        return '🚌';
       default: return '📝';
     }
   };
@@ -241,8 +280,8 @@ export default function DaresPage() {
           <p className="text-2xl font-bold text-yellow-400">{stats.funny}</p>
         </div>
         <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-          <p className="text-gray-400 text-sm">❤️ Love</p>
-          <p className="text-2xl font-bold text-pink-400">{stats.love}</p>
+          <p className="text-gray-400 text-sm">❤️ Romantic</p>
+          <p className="text-2xl font-bold text-pink-400">{stats.romantic}</p>
         </div>
         <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
           <p className="text-gray-400 text-sm">Active</p>
@@ -268,7 +307,7 @@ export default function DaresPage() {
                     : 'bg-gray-700 text-gray-400 hover:text-white'
                 }`}
               >
-                {cat === 'all' ? 'All' : `${getCategoryIcon(cat)} ${cat.charAt(0).toUpperCase() + cat.slice(1)}`}
+                {cat === 'all' ? 'All' : `${getCategoryIcon(cat)} ${formatCategoryLabel(cat)}`}
               </button>
             ))}
           </div>
@@ -293,6 +332,7 @@ export default function DaresPage() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Dare Text</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Category</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Font</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Actions</th>
                 </tr>
@@ -301,12 +341,20 @@ export default function DaresPage() {
                 {filterDares().map((dare) => (
                   <tr key={dare.id} className="hover:bg-gray-700/30">
                     <td className="px-4 py-4">
-                      <p className={`text-white max-w-xl ${getTextStyleClass(dare.style)}`}>{dare.dare_text}</p>
+                      <p
+                        className={`text-white max-w-xl ${getTextStyleClass(dare.style)}`}
+                        style={{ fontFamily: getFontFamily(dare.font) }}
+                      >
+                        {dare.dare_text}
+                      </p>
                     </td>
                     <td className="px-4 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCategoryColor(dare.category)}`}>
-                        {getCategoryIcon(dare.category)} {dare.category}
+                        {getCategoryIcon(dare.category)} {formatCategoryLabel(dare.category)}
                       </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="text-sm text-gray-300">{dare.font || 'default'}</span>
                     </td>
                     <td className="px-4 py-4">
                       <button 
@@ -421,7 +469,7 @@ export default function DaresPage() {
               {/* Category */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
-                <div className="flex space-x-3">
+                <div className="flex space-x-3 flex-wrap gap-2">
                   {categories.map(cat => (
                     <button
                       key={cat}
@@ -432,10 +480,24 @@ export default function DaresPage() {
                           : 'bg-gray-700 text-gray-400 border-gray-600 hover:text-white'
                       }`}
                     >
-                      {getCategoryIcon(cat)} {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      {getCategoryIcon(cat)} {formatCategoryLabel(cat)}
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Font */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Font</label>
+                <select
+                  value={formData.font}
+                  onChange={(e) => setFormData({ ...formData, font: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                >
+                  {fonts.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
               </div>
               
               {/* Active Status */}

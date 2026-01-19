@@ -32,13 +32,16 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { dare_text, category, is_active, style } = body;
+    const { dare_text, category, is_active, style, font } = body;
     
     if (!dare_text?.trim()) {
       return NextResponse.json({ error: 'Dare text is required' }, { status: 400 });
     }
 
     const payload = { dare_text: dare_text.trim(), category, is_active };
+    if (typeof font === 'string' && font.trim()) {
+      payload.font = font.trim();
+    }
     if (style && typeof style === 'object') {
       payload.style = {
         bold: style.bold === true,
@@ -51,6 +54,14 @@ export async function POST(request) {
       .from('dares')
       .insert([payload])
       .select();
+
+    if (error && payload.font && /column .*font/i.test(error.message || '')) {
+      delete payload.font;
+      ({ data, error } = await supabaseAdmin
+        .from('dares')
+        .insert([payload])
+        .select());
+    }
 
     if (error && payload.style && /column .*style/i.test(error.message || '')) {
       delete payload.style;
@@ -71,13 +82,16 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { id, dare_text, category, is_active, style } = body;
+    const { id, dare_text, category, is_active, style, font } = body;
     
     if (!id) {
       return NextResponse.json({ error: 'Dare ID is required' }, { status: 400 });
     }
 
     const payload = { dare_text: dare_text?.trim(), category, is_active };
+    if (typeof font === 'string' && font.trim()) {
+      payload.font = font.trim();
+    }
     if (style && typeof style === 'object') {
       payload.style = {
         bold: style.bold === true,
@@ -91,6 +105,15 @@ export async function PUT(request) {
       .update(payload)
       .eq('id', id)
       .select();
+
+    if (error && payload.font && /column .*font/i.test(error.message || '')) {
+      delete payload.font;
+      ({ data, error } = await supabaseAdmin
+        .from('dares')
+        .update(payload)
+        .eq('id', id)
+        .select());
+    }
 
     if (error && payload.style && /column .*style/i.test(error.message || '')) {
       delete payload.style;
