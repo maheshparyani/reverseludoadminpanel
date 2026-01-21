@@ -69,7 +69,7 @@ export default function PromotionsPage() {
 
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
-        .from('promotion-images')
+        .from('promotion_images')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
@@ -79,7 +79,7 @@ export default function PromotionsPage() {
 
       // Get public URL
       const { data: urlData } = supabase.storage
-        .from('promotion-images')
+        .from('promotion_images')
         .getPublicUrl(filePath);
 
       const publicUrl = urlData.publicUrl;
@@ -90,7 +90,7 @@ export default function PromotionsPage() {
 
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Failed to upload image. Make sure the "promotion-images" bucket exists in Supabase Storage.');
+      alert('Failed to upload image. Make sure the "promotion_images" bucket exists in Supabase Storage.');
     } finally {
       setUploading(false);
     }
