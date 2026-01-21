@@ -10,7 +10,7 @@ export default function DaresPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedDare, setSelectedDare] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [stats, setStats] = useState({ total: 0, casual: 0, funny: 0, romantic: 0, train_bus: 0, active: 0, inactive: 0 });
+  const [stats, setStats] = useState({ total: 0, casual: 0, romantic: 0, train_bus: 0, friends_family: 0, active: 0, inactive: 0 });
 
   const [formData, setFormData] = useState({
     dare_text: '',
@@ -20,7 +20,7 @@ export default function DaresPage() {
     style: { bold: false, italic: false, underline: false }
   });
 
-  const categories = ['casual', 'funny', 'romantic', 'train_bus'];
+  const categories = ['casual', 'romantic', 'train_bus', 'friends_family'];
   const fonts = [
     { value: 'default', label: 'Default' },
     { value: 'cursive', label: 'Cursive' },
@@ -46,12 +46,12 @@ export default function DaresPage() {
   };
 
   const calculateStats = (data) => {
-    const s = { total: data.length, casual: 0, funny: 0, romantic: 0, train_bus: 0, active: 0, inactive: 0 };
+    const s = { total: data.length, casual: 0, romantic: 0, train_bus: 0, friends_family: 0, active: 0, inactive: 0 };
     data.forEach(d => {
       if (d.category === 'casual') s.casual++;
-      else if (d.category === 'funny') s.funny++;
       else if (d.category === 'romantic' || d.category === 'love') s.romantic++;
       else if (d.category === 'train_bus') s.train_bus++;
+      else if (d.category === 'friends_family' || d.category === 'funny') s.friends_family++;
       if (d.is_active) s.active++;
       else s.inactive++;
     });
@@ -63,6 +63,8 @@ export default function DaresPage() {
     if (activeCategory !== 'all') {
       if (activeCategory === 'romantic') {
         filtered = filtered.filter(d => d.category === 'romantic' || d.category === 'love');
+      } else if (activeCategory === 'friends_family') {
+        filtered = filtered.filter(d => d.category === 'friends_family' || d.category === 'funny');
       } else {
         filtered = filtered.filter(d => d.category === activeCategory);
       }
@@ -165,7 +167,11 @@ export default function DaresPage() {
     setSelectedDare(dare);
     setFormData({
       dare_text: dare.dare_text || '',
-      category: (dare.category === 'love' ? 'romantic' : (dare.category || 'casual')),
+      category: (dare.category === 'love'
+        ? 'romantic'
+        : (dare.category === 'funny'
+          ? 'friends_family'
+          : (dare.category || 'casual'))),
       is_active: dare.is_active ?? true,
       font: dare.font || 'default',
       style: {
@@ -199,8 +205,13 @@ export default function DaresPage() {
   };
 
   const formatCategoryLabel = (category) => {
-    const normalized = category === 'love' ? 'romantic' : category;
+    const normalized = category === 'love'
+      ? 'romantic'
+      : (category === 'funny'
+        ? 'friends_family'
+        : category);
     if (normalized === 'train_bus') return 'Train/Bus';
+    if (normalized === 'friends_family') return 'Friends/Family';
     return normalized.charAt(0).toUpperCase() + normalized.slice(1);
   };
 
@@ -225,7 +236,9 @@ export default function DaresPage() {
   const getCategoryColor = (category) => {
     switch (category) {
       case 'casual': return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
-      case 'funny': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
+      case 'friends_family':
+      case 'funny':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
       case 'romantic':
       case 'love':
         return 'bg-pink-500/20 text-pink-400 border-pink-500/50';
@@ -238,7 +251,9 @@ export default function DaresPage() {
   const getCategoryIcon = (category) => {
     switch (category) {
       case 'casual': return '🎯';
-      case 'funny': return '😂';
+      case 'friends_family':
+      case 'funny':
+        return '😂';
       case 'romantic':
       case 'love':
         return '❤️';
@@ -276,8 +291,8 @@ export default function DaresPage() {
           <p className="text-2xl font-bold text-blue-400">{stats.casual}</p>
         </div>
         <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-          <p className="text-gray-400 text-sm">😂 Funny</p>
-          <p className="text-2xl font-bold text-yellow-400">{stats.funny}</p>
+          <p className="text-gray-400 text-sm">😂 Friends/Family</p>
+          <p className="text-2xl font-bold text-yellow-400">{stats.friends_family}</p>
         </div>
         <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
           <p className="text-gray-400 text-sm">❤️ Romantic</p>
