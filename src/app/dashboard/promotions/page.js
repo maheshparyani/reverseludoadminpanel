@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
+const PROMOTION_IMAGES_BUCKET =
+  process.env.NEXT_PUBLIC_PROMOTION_IMAGES_BUCKET || 'promotion_images';
+
 export default function PromotionsPage() {
   const [promotions, setPromotions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +72,7 @@ export default function PromotionsPage() {
 
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
-        .from('promotion_images')
+        .from(PROMOTION_IMAGES_BUCKET)
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
@@ -79,7 +82,7 @@ export default function PromotionsPage() {
 
       // Get public URL
       const { data: urlData } = supabase.storage
-        .from('promotion_images')
+        .from(PROMOTION_IMAGES_BUCKET)
         .getPublicUrl(filePath);
 
       const publicUrl = urlData.publicUrl;
@@ -90,7 +93,14 @@ export default function PromotionsPage() {
 
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Failed to upload image. Make sure the "promotion_images" bucket exists in Supabase Storage.');
+      const msg =
+        error?.message ||
+        error?.error_description ||
+        (typeof error === 'string' ? error : null) ||
+        'Unknown error';
+      alert(
+        `Failed to upload image to bucket "${PROMOTION_IMAGES_BUCKET}". ${msg}`,
+      );
     } finally {
       setUploading(false);
     }
