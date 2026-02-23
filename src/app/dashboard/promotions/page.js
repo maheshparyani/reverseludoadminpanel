@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const PROMOTION_IMAGES_BUCKET =
-  process.env.NEXT_PUBLIC_PROMOTION_IMAGES_BUCKET || 'promotion_images';
+  process.env.NEXT_PUBLIC_PROMOTION_IMAGES_BUCKET || 'promotion-images';
 
 export default function PromotionsPage() {
   const [promotions, setPromotions] = useState([]);
