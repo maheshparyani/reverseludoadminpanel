@@ -130,7 +130,12 @@ export default function PromotionsPage() {
       loadPromotions();
     } catch (error) {
       console.error('Error saving promotion:', error);
-      alert('Failed to save promotion');
+      const msg =
+        error?.message ||
+        error?.error_description ||
+        (typeof error === 'string' ? error : null) ||
+        'Unknown error';
+      alert(`Failed to save promotion. ${msg}`);
     } finally {
       setSaving(false);
     }
