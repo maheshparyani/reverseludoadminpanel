@@ -6,14 +6,24 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-/** GET — users with FCM token (admin: service role) */
-export async function GET() {
+/** GET — users with FCM token (admin: service role), paginated */
+export async function GET(request) {
   try {
-    const { data, error } = await supabase
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const pageSizeRaw = parseInt(searchParams.get('pageSize') || '20', 10) || 20;
+    const pageSize = Math.min(100, Math.max(1, pageSizeRaw));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('users')
-      .select('uid, username, fcm_token, fcm_platform, fcm_token_updated_at')
+      .select('uid, username, fcm_token, fcm_platform, fcm_token_updated_at', {
+        count: 'exact',
+      })
       .not('fcm_token', 'is', null)
-      .order('fcm_token_updated_at', { ascending: false });
+      .order('fcm_token_updated_at', { ascending: false })
+      .range(from, to);
 
     if (error) {
       console.error('[device-tokens]', error);
@@ -28,7 +38,9 @@ export async function GET() {
       tokenUpdatedAt: r.fcm_token_updated_at ?? null,
     }));
 
-    return NextResponse.json({ tokens: rows, count: rows.length });
+    const total = typeof count === 'number' ? count : rows.length;
+
+    return NextResponse.json({ tokens: rows, total, page, pageSize });
   } catch (err) {
     return NextResponse.json(
       { error: err.message || 'Failed to load device tokens' },

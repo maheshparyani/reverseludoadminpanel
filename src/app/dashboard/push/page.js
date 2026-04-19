@@ -19,6 +19,52 @@ const IMAGE_BUCKET =
 const inputClass =
   'w-full bg-gray-900/60 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500';
 
+const TABLE_PAGE_SIZE = 20;
+
+function pushLogStatus(row) {
+  const ok = Number(row.ok_count) || 0;
+  const fail = Number(row.fail_count) || 0;
+  if (fail > 0) return { label: 'Failed', className: 'text-red-400' };
+  if (ok > 0) return { label: 'Delivered', className: 'text-green-400' };
+  return { label: '—', className: 'text-gray-500' };
+}
+
+function TablePagination({ page, pageSize, total, loading, onPageChange }) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const from = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const to = Math.min(safePage * pageSize, total);
+  const btnDisabled = loading;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-gray-700 bg-gray-900/30">
+      <span className="text-xs text-gray-500">
+        {total === 0 ? 'No rows' : `Showing ${from}–${to} of ${total}`}
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={btnDisabled || safePage <= 1}
+          onClick={() => onPageChange(safePage - 1)}
+          className="px-3 py-1.5 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-white border border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Previous
+        </button>
+        <span className="text-xs text-gray-400 tabular-nums">
+          Page {safePage} of {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={btnDisabled || safePage >= totalPages}
+          onClick={() => onPageChange(safePage + 1)}
+          className="px-3 py-1.5 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-white border border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PushNotificationsPage() {
   const [tab, setTab] = useState('send');
 
@@ -44,12 +90,16 @@ export default function PushNotificationsPage() {
   const tgFileRef = useRef(null);
 
   const [pushHistoryRows, setPushHistoryRows] = useState([]);
+  const [pushLogsTotal, setPushLogsTotal] = useState(0);
+  const [logsPage, setLogsPage] = useState(1);
   const [pushLogsTableAvailable, setPushLogsTableAvailable] = useState(true);
   const [supabaseKeyMisconfigured, setSupabaseKeyMisconfigured] = useState(false);
   const [pushHistoryLoading, setPushHistoryLoading] = useState(false);
   const [pushHistoryError, setPushHistoryError] = useState(null);
 
   const [tokenRows, setTokenRows] = useState([]);
+  const [tokenTotal, setTokenTotal] = useState(0);
+  const [tokenPage, setTokenPage] = useState(1);
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenError, setTokenError] = useState(null);
 
@@ -142,11 +192,16 @@ export default function PushNotificationsPage() {
       setPushHistoryError(null);
       setSupabaseKeyMisconfigured(false);
       try {
-        const res = await fetch('/api/push/logs');
+        const qs = new URLSearchParams({
+          page: String(logsPage),
+          pageSize: String(TABLE_PAGE_SIZE),
+        });
+        const res = await fetch(`/api/push/logs?${qs}`);
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || 'Failed to load');
         if (!cancelled) {
           setPushHistoryRows(json?.logs || []);
+          setPushLogsTotal(typeof json?.total === 'number' ? json.total : (json?.logs || []).length);
           setPushLogsTableAvailable(json?.pushLogsTableAvailable !== false);
           setSupabaseKeyMisconfigured(!!json?.supabaseKeyMisconfigured);
         }
@@ -159,7 +214,7 @@ export default function PushNotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab]);
+  }, [tab, logsPage]);
 
   useEffect(() => {
     if (tab !== 'tokens') return;
@@ -168,10 +223,17 @@ export default function PushNotificationsPage() {
       setTokenLoading(true);
       setTokenError(null);
       try {
-        const res = await fetch('/api/push/device-tokens');
+        const qs = new URLSearchParams({
+          page: String(tokenPage),
+          pageSize: String(TABLE_PAGE_SIZE),
+        });
+        const res = await fetch(`/api/push/device-tokens?${qs}`);
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || 'Failed to load');
-        if (!cancelled) setTokenRows(json?.tokens || []);
+        if (!cancelled) {
+          setTokenRows(json?.tokens || []);
+          setTokenTotal(typeof json?.total === 'number' ? json.total : (json?.tokens || []).length);
+        }
       } catch (e) {
         if (!cancelled) setTokenError(e.message);
       } finally {
@@ -181,7 +243,19 @@ export default function PushNotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab]);
+  }, [tab, tokenPage]);
+
+  useEffect(() => {
+    if (tab !== 'notifications' || pushHistoryLoading) return;
+    const maxPage = Math.max(1, Math.ceil(pushLogsTotal / TABLE_PAGE_SIZE));
+    if (logsPage > maxPage) setLogsPage(maxPage);
+  }, [tab, pushHistoryLoading, pushLogsTotal, logsPage]);
+
+  useEffect(() => {
+    if (tab !== 'tokens' || tokenLoading) return;
+    const maxPage = Math.max(1, Math.ceil(tokenTotal / TABLE_PAGE_SIZE));
+    if (tokenPage > maxPage) setTokenPage(maxPage);
+  }, [tab, tokenLoading, tokenTotal, tokenPage]);
 
   const sendBroadcast = async () => {
     if (!bc.title?.trim() || !bc.body?.trim() || !bc.type?.trim()) {
@@ -299,7 +373,11 @@ export default function PushNotificationsPage() {
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setTab(t.id);
+                if (t.id === 'notifications') setPushHistoryLoading(true);
+                if (t.id === 'tokens') setTokenLoading(true);
+              }}
               className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
                 tab === t.id
                   ? 'bg-purple-600 text-white border border-b-0 border-gray-700 -mb-px'
@@ -584,7 +662,7 @@ export default function PushNotificationsPage() {
             <div className="p-8 text-center text-gray-400">Loading…</div>
           ) : pushHistoryError ? (
             <div className="p-8 text-center text-red-400">{pushHistoryError}</div>
-          ) : pushHistoryRows.length === 0 ? (
+          ) : pushLogsTotal === 0 ? (
             <div className="p-8 text-center text-gray-500">
               {!pushLogsTableAvailable
                 ? 'After you create the table and send pushes, history will appear here.'
@@ -602,48 +680,55 @@ export default function PushNotificationsPage() {
                     <th className="px-4 py-3 font-medium">Type</th>
                     <th className="px-4 py-3 font-medium">Title</th>
                     <th className="px-4 py-3 font-medium">Body</th>
-                    <th className="px-4 py-3 font-medium">Reach</th>
-                    <th className="px-4 py-3 font-medium">OK / Fail</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
-                  {pushHistoryRows.map((n) => (
-                    <tr key={n.id} className="hover:bg-gray-700/30">
-                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                        {n.created_at
-                          ? new Date(n.created_at).toLocaleString()
-                          : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-white capitalize">{n.mode ?? '—'}</td>
-                      <td className="px-4 py-3 text-purple-300">
-                        {n.payload_type
-                          ? PUSH_NOTIFICATION_DESTINATIONS.find(
-                              (d) => d.value === n.payload_type,
-                            )?.label ?? n.payload_type
-                          : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-white max-w-[160px] truncate">
-                        {n.title ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-300 max-w-xs truncate">
-                        {n.body ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">
-                        {n.mode === 'broadcast' && n.recipients_unique_tokens != null
-                          ? `${n.recipients_unique_tokens} tokens`
-                          : n.mode === 'targeted' && Array.isArray(n.target_user_ids)
-                            ? `${n.target_user_ids.length} user(s)`
+                  {pushHistoryRows.map((n) => {
+                    const st = pushLogStatus(n);
+                    return (
+                      <tr key={n.id} className="hover:bg-gray-700/30">
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
+                          {n.created_at
+                            ? new Date(n.created_at).toLocaleString()
                             : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">
-                        {n.ok_count ?? '—'} / {n.fail_count ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 text-white capitalize">{n.mode ?? '—'}</td>
+                        <td className="px-4 py-3 text-purple-300">
+                          {n.payload_type
+                            ? PUSH_NOTIFICATION_DESTINATIONS.find(
+                                (d) => d.value === n.payload_type,
+                              )?.label ?? n.payload_type
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-white max-w-[160px] truncate">
+                          {n.title ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-300 max-w-xs truncate">
+                          {n.body ?? '—'}
+                        </td>
+                        <td className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${st.className}`}>
+                          {st.label}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
+          {!pushHistoryLoading &&
+            !pushHistoryError &&
+            pushLogsTableAvailable &&
+            (pushHistoryRows.length > 0 || pushLogsTotal > 0) && (
+              <TablePagination
+                page={logsPage}
+                pageSize={TABLE_PAGE_SIZE}
+                total={pushLogsTotal}
+                loading={pushHistoryLoading}
+                onPageChange={setLogsPage}
+              />
+            )}
         </div>
       )}
 
@@ -659,7 +744,7 @@ export default function PushNotificationsPage() {
             <div className="p-8 text-center text-gray-400">Loading…</div>
           ) : tokenError ? (
             <div className="p-8 text-center text-red-400">{tokenError}</div>
-          ) : tokenRows.length === 0 ? (
+          ) : tokenTotal === 0 ? (
             <div className="p-8 text-center text-gray-500">
               No device tokens registered
             </div>
@@ -699,6 +784,17 @@ export default function PushNotificationsPage() {
               </table>
             </div>
           )}
+          {!tokenLoading &&
+            !tokenError &&
+            (tokenRows.length > 0 || tokenTotal > 0) && (
+              <TablePagination
+                page={tokenPage}
+                pageSize={TABLE_PAGE_SIZE}
+                total={tokenTotal}
+                loading={tokenLoading}
+                onPageChange={setTokenPage}
+              />
+            )}
         </div>
       )}
     </div>
