@@ -18,7 +18,8 @@ export async function GET() {
 
     // Get game rooms stats
     const { data: gameRooms, error: gameRoomsError } = await supabase.from('game_rooms').select('*');
-    
+    if (gameRoomsError) throw gameRoomsError;
+
     // Calculate stats
     const userStats = {
       total: users?.length || 0,

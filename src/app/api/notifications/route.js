@@ -6,7 +6,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-// Get all notifications
+function isNotificationsTableMissing(error) {
+  if (!error) return false;
+  const msg = String(error.message || '').toLowerCase();
+  const code = String(error.code || '');
+  return (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    msg.includes('could not find the table') ||
+    msg.includes('schema cache') ||
+    (msg.includes('relation') && msg.includes('does not exist'))
+  );
+}
+
+// Get all notifications (optional table — many DBs only use users.mailbox)
 export async function GET() {
   try {
     const { data, error } = await supabase
@@ -15,8 +28,19 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    if (error) throw error;
-    return NextResponse.json({ notifications: data || [] });
+    if (error) {
+      if (isNotificationsTableMissing(error)) {
+        return NextResponse.json({
+          notifications: [],
+          notificationsTableAvailable: false,
+        });
+      }
+      throw error;
+    }
+    return NextResponse.json({
+      notifications: data || [],
+      notificationsTableAvailable: true,
+    });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 export default function NotificationsPage() {
   const [tournaments, setTournaments] = useState([]);
@@ -179,6 +180,16 @@ export default function NotificationsPage() {
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
           Send Notification
         </button>
+      </div>
+
+      <div className="mb-4 p-3 bg-blue-900/30 border border-blue-600/50 rounded-lg text-sm text-gray-200">
+        <Link href="/dashboard/push" className="text-blue-300 font-semibold underline hover:text-white">
+          Push Notification
+        </Link>
+        {' '}
+        — phone par push (Firebase). Is page se message{' '}
+        <strong className="text-white">in-app mailbox</strong> / DB mein jata hai (<code className="text-purple-300">/api/notifications</code>
+        ).
       </div>
 
       {/* Quick Stats */}
