@@ -6,6 +6,72 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+function isMissingTableError(message) {
+  if (!message || typeof message !== 'string') return false;
+  const m = message.toLowerCase();
+  return (
+    m.includes('could not find the table') ||
+    (m.includes('relation') && m.includes('does not exist'))
+  );
+}
+
+/** Solo-score `tournament` rows → same shape as bracket `tournaments` for the stats UI */
+function mapSingularTournamentForStats(row) {
+  const label = deriveSingularTournamentPhase(row);
+  const status =
+    label === 'Draft' || label === 'Upcoming'
+      ? 'upcoming'
+      : label === 'Active'
+        ? 'in_progress'
+        : label === 'Ended'
+          ? 'finals'
+          : 'completed';
+
+  return {
+    tournament_id: row.id,
+    tournament_name: row.tournament_title ?? 'Tournament',
+    status,
+    entry_fee: Number(row.entry_fee) || 0,
+    reward_amount: Number(row.reward_amount) || 0,
+    current_players: Number(row.tournament_entries) || 0,
+    tournament_starting_time: row.tournament_start_time,
+  };
+}
+
+function deriveSingularTournamentPhase(row) {
+  if (
+    !row?.tournament_start_time ||
+    !row?.tournament_end_time ||
+    !row?.tournament_result_time
+  ) {
+    return 'Draft';
+  }
+  const clean = (s) =>
+    String(s).replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '');
+  const now = new Date();
+  const startTime = new Date(clean(row.tournament_start_time));
+  const endTime = new Date(clean(row.tournament_end_time));
+  const resultTime = new Date(clean(row.tournament_result_time));
+  if (now < startTime) return 'Upcoming';
+  if (now >= startTime && now < endTime) return 'Active';
+  if (now >= endTime && now < resultTime) return 'Ended';
+  return 'Results Out';
+}
+
+async function fetchTournamentRowsForStats() {
+  const { data, error } = await supabase.from('tournaments').select('*');
+  if (!error) return data || [];
+
+  if (!isMissingTableError(error.message)) throw error;
+
+  const { data: rows, error: err2 } = await supabase.from('tournament').select('*');
+  if (err2) {
+    if (isMissingTableError(err2.message)) return [];
+    throw err2;
+  }
+  return (rows || []).map(mapSingularTournamentForStats);
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -14,9 +80,8 @@ export async function GET(request) {
     const { data: users, error: usersError } = await supabase.from('users').select('*');
     if (usersError) throw usersError;
 
-    // Get tournament stats
-    const { data: tournaments, error: tournamentsError } = await supabase.from('tournaments').select('*');
-    if (tournamentsError) throw tournamentsError;
+    // Bracket `tournaments` table OR solo-score `tournament` table
+    const tournaments = await fetchTournamentRowsForStats();
 
     // Get game rooms stats
     const { data: gameRooms, error: gameRoomsError } = await supabase.from('game_rooms').select('*');
