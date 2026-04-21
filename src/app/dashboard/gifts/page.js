@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function GiftUsersPage() {
   const [users, setUsers] = useState([]);
@@ -25,60 +24,15 @@ export default function GiftUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch users first
-      console.log('Fetching users...');
-      const usersRes = await supabase
-        .from('users')
-        .select('uid, username, profile_image_url, total_coins, total_diamonds, owned_items');
-      
-      console.log('Users response:', usersRes);
-      
-      if (usersRes.error) {
-        console.error('Error fetching users:', usersRes.error);
-        setError('Failed to fetch users: ' + usersRes.error.message);
-      } else {
-        console.log('Users fetched:', usersRes.data?.length || 0);
-        setUsers(usersRes.data || []);
+      const res = await fetch('/api/admin/gifts');
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Failed to load gifts data');
+        return;
       }
-
-      // Fetch inventory items
-      const itemsRes = await supabase
-        .from('inventory')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (itemsRes.error) {
-        console.error('Error fetching items:', itemsRes.error);
-      } else {
-        setItems(itemsRes.data || []);
-      }
-
-      // Fetch gift history separately without join
-      const historyRes = await supabase
-        .from('gift_history')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      
-      if (historyRes.error) {
-        console.log('Gift history error:', historyRes.error.message);
-      } else if (historyRes.data && historyRes.data.length > 0) {
-        // Fetch user details for gift history
-        const userIds = [...new Set(historyRes.data.map(g => g.user_id))];
-        const { data: historyUsers } = await supabase
-          .from('users')
-          .select('uid, username')
-          .in('uid', userIds);
-        
-        const usersMap = {};
-        (historyUsers || []).forEach(u => { usersMap[u.uid] = u; });
-        
-        const historyWithUsers = historyRes.data.map(g => ({
-          ...g,
-          users: usersMap[g.user_id] || null
-        }));
-        setGiftHistory(historyWithUsers);
-      }
+      setUsers(json.users || []);
+      setItems(json.items || []);
+      setGiftHistory(json.giftHistory || []);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message);
@@ -111,81 +65,20 @@ export default function GiftUsersPage() {
     setSending(true);
     try {
       const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
-      
-      if (giftType === 'item') {
-        // Add item to user's owned_items
-        const currentItems = selectedUser.owned_items || [];
-        const updatedItems = [...currentItems, selectedItem.item_id];
-        
-        await supabase
-          .from('users')
-          .update({ owned_items: updatedItems })
-          .eq('uid', selectedUser.uid);
-
-        // Record gift history (optional - table may not exist)
-        try {
-          await supabase.from('gift_history').insert({
-            admin_id: adminUser.email || 'admin',
-            user_id: selectedUser.uid,
-            gift_type: 'item',
-            item_id: selectedItem.item_id,
-            item_name: selectedItem.item_name,
-            message: message || `You received a gift: ${selectedItem.item_name}!`
-          });
-        } catch (e) { console.log('Gift history not recorded:', e); }
-
-        // Send mail notification
-        await sendMailNotification(selectedUser.uid, 'gift', 
-          `🎁 You received a gift!`,
-          message || `You've been gifted "${selectedItem.item_name}"! Check your inventory to use it.`
-        );
-
-      } else if (giftType === 'coins') {
-        const newCoins = (selectedUser.total_coins || 0) + parseInt(amount);
-        
-        await supabase
-          .from('users')
-          .update({ total_coins: newCoins })
-          .eq('uid', selectedUser.uid);
-
-        try {
-          await supabase.from('gift_history').insert({
-            admin_id: adminUser.email || 'admin',
-            user_id: selectedUser.uid,
-            gift_type: 'coins',
-            amount: parseInt(amount),
-            message: message || `You received ${amount} coins!`
-          });
-        } catch (e) { console.log('Gift history not recorded:', e); }
-
-        await sendMailNotification(selectedUser.uid, 'reward',
-          `🪙 You received ${amount} coins!`,
-          message || `${amount} coins have been added to your account. Enjoy!`
-        );
-
-      } else if (giftType === 'diamonds') {
-        const newDiamonds = (selectedUser.total_diamonds || 0) + parseInt(amount);
-        
-        await supabase
-          .from('users')
-          .update({ total_diamonds: newDiamonds })
-          .eq('uid', selectedUser.uid);
-
-        try {
-          await supabase.from('gift_history').insert({
-            admin_id: adminUser.email || 'admin',
-            user_id: selectedUser.uid,
-            gift_type: 'diamonds',
-            amount: parseInt(amount),
-            message: message || `You received ${amount} diamonds!`
-          });
-        } catch (e) { console.log('Gift history not recorded:', e); }
-
-        await sendMailNotification(selectedUser.uid, 'reward',
-          `💎 You received ${amount} diamonds!`,
-          message || `${amount} diamonds have been added to your account. Enjoy!`
-        );
-      }
+      const res = await fetch('/api/admin/gifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          giftType,
+          userUid: selectedUser.uid,
+          adminId: adminUser.email || 'admin',
+          selectedItem: giftType === 'item' ? selectedItem : undefined,
+          amount: giftType === 'coins' || giftType === 'diamonds' ? amount : undefined,
+          message: message || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
 
       alert('Gift sent successfully!');
       setShowModal(false);
@@ -197,48 +90,6 @@ export default function GiftUsersPage() {
       setSending(false);
     }
   };
-
-  const sendMailNotification = async (userId, type, title, content) => {
-    try {
-      // Get current user's mailbox (JSONB array in users table)
-      const { data: userData, error: fetchError } = await supabase
-        .from('users')
-        .select('mailbox')
-        .eq('uid', userId)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching user mailbox:', fetchError);
-        return;
-      }
-
-      const currentMailbox = userData?.mailbox || [];
-      
-      // Create new mail item matching the app's structure
-      const newMail = {
-        mail_type: type === 'gift' ? 'general' : type, // 'general', 'reward', etc.
-        title: title,
-        content: content,
-        timestamp: new Date().toISOString(),
-        seen: false
-      };
-
-      // Add new mail to the beginning of the array
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ mailbox: [newMail, ...currentMailbox] })
-        .eq('uid', userId);
-
-      if (updateError) {
-        console.error('Error updating user mail:', updateError);
-      } else {
-        console.log('Mail sent successfully to user:', userId);
-      }
-    } catch (err) {
-      console.error('Error sending mail notification:', err);
-    }
-  };
-
 
   const filteredUsers = users.filter(u =>
     u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||

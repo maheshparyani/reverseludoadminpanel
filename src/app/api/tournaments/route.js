@@ -16,6 +16,18 @@ export async function GET(request) {
     const tournamentId = searchParams.get('tournamentId');
     const playersFlag = searchParams.get('players');
 
+    const leaderboardFor = searchParams.get('leaderboardFor');
+    if (leaderboardFor) {
+      const { data, error } = await supabase
+        .from('leaderboard')
+        .select('*')
+        .eq('tournament_id', leaderboardFor)
+        .order('rank', { ascending: true });
+
+      if (error) throw error;
+      return NextResponse.json({ leaderboard: data || [] });
+    }
+
     if (playersFlag === '1') {
       if (!tournamentId) {
         return NextResponse.json({ error: 'tournamentId is required' }, { status: 400 });
@@ -38,6 +50,16 @@ export async function GET(request) {
       });
 
       return NextResponse.json({ players });
+    }
+
+    if (searchParams.get('full') === '1') {
+      const { data, error } = await supabase
+        .from('tournament')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return NextResponse.json({ tournaments: data || [] });
     }
 
     const { data, error } = await supabase

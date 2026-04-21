@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function UserMessagesPage() {
   const [chats, setChats] = useState([]);
@@ -16,6 +15,14 @@ export default function UserMessagesPage() {
   useEffect(() => { fetchChats(); }, [filter]);
 
   useEffect(() => {
+    const t = setInterval(() => {
+      fetchChats();
+      if (selectedChat) fetchMessages(selectedChat.id);
+    }, 20000);
+    return () => clearInterval(t);
+  }, [filter, selectedChat?.id]);
+
+  useEffect(() => {
     if (selectedChat) {
       fetchMessages(selectedChat.id);
       markAsRead(selectedChat.id);
@@ -26,91 +33,19 @@ export default function UserMessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Real-time subscription for new messages
-  useEffect(() => {
-    // Subscribe to new chats
-    const chatsChannel = supabase
-      .channel('admin_chats_changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'admin_chats' },
-        () => {
-          console.log('Chat updated, refreshing...');
-          fetchChats();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(chatsChannel);
-    };
-  }, [filter]);
-
-  // Real-time subscription for messages in selected chat
-  useEffect(() => {
-    if (!selectedChat) return;
-
-    const messagesChannel = supabase
-      .channel(`chat_messages_${selectedChat.id}`)
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'admin_chat_messages', filter: `chat_id=eq.${selectedChat.id}` },
-        (payload) => {
-          console.log('New message received:', payload);
-          setMessages(prev => [...prev, payload.new]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(messagesChannel);
-    };
-  }, [selectedChat?.id]);
-
   const [error, setError] = useState(null);
 
   const fetchChats = async () => {
     setLoading(true);
     setError(null);
     try {
-      // First fetch chats
-      let query = supabase
-        .from('admin_chats')
-        .select('*')
-        .order('last_message_at', { ascending: false });
-
-      if (filter === 'unread') query = query.eq('unread_by_admin', true);
-      else if (filter === 'open') query = query.eq('status', 'open');
-      else if (filter === 'closed') query = query.eq('status', 'closed');
-
-      const { data: chatsData, error: queryError } = await query;
-      
-      if (queryError) {
-        console.error('Query error:', queryError);
-        setError(queryError.message || 'Failed to fetch chats');
+      const res = await fetch(`/api/admin/support-chats?filter=${encodeURIComponent(filter)}`);
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Failed to fetch chats');
         return;
       }
-
-      if (!chatsData || chatsData.length === 0) {
-        setChats([]);
-        return;
-      }
-
-      // Fetch user details separately
-      const userIds = [...new Set(chatsData.map(c => c.user_id))];
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('uid, username, profile_image_url')
-        .in('uid', userIds);
-
-      // Merge user data into chats
-      const usersMap = {};
-      (usersData || []).forEach(u => { usersMap[u.uid] = u; });
-      
-      const chatsWithUsers = chatsData.map(chat => ({
-        ...chat,
-        users: usersMap[chat.user_id] || null
-      }));
-
-      setChats(chatsWithUsers);
+      setChats(json.chats || []);
     } catch (err) {
       console.error('Error fetching chats:', err);
       setError(err.message);
@@ -121,14 +56,10 @@ export default function UserMessagesPage() {
 
   const fetchMessages = async (chatId) => {
     try {
-      const { data, error } = await supabase
-        .from('admin_chat_messages')
-        .select('*')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setMessages(data || []);
+      const res = await fetch(`/api/admin/support-chats/messages?chatId=${encodeURIComponent(chatId)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setMessages(json.messages || []);
     } catch (err) {
       console.error('Error fetching messages:', err);
     }
@@ -136,10 +67,11 @@ export default function UserMessagesPage() {
 
   const markAsRead = async (chatId) => {
     try {
-      await supabase
-        .from('admin_chats')
-        .update({ unread_by_admin: false })
-        .eq('id', chatId);
+      await fetch('/api/admin/support-chats', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: chatId, unread_by_admin: false }),
+      });
       
       // Update local state
       setChats(prev => prev.map(c => 
@@ -155,15 +87,17 @@ export default function UserMessagesPage() {
     setSending(true);
 
     try {
-      const { error } = await supabase
-        .from('admin_chat_messages')
-        .insert({
+      const res = await fetch('/api/admin/support-chats/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           chat_id: selectedChat.id,
           sender_type: 'admin',
-          message: replyText.trim()
-        });
-
-      if (error) throw error;
+          message: replyText.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
 
       // Refresh messages
       await fetchMessages(selectedChat.id);
@@ -178,10 +112,11 @@ export default function UserMessagesPage() {
 
   const updateChatStatus = async (chatId, status) => {
     try {
-      await supabase
-        .from('admin_chats')
-        .update({ status })
-        .eq('id', chatId);
+      await fetch('/api/admin/support-chats', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: chatId, status }),
+      });
 
       setChats(prev => prev.map(c => 
         c.id === chatId ? { ...c, status } : c

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function DashboardPage() {
   const [users, setUsers] = useState([]);
@@ -31,12 +30,11 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      const [tourneysRes, roomsRes] = await Promise.all([
-        supabase.from('tournaments').select('*'),
-        supabase.from('game_rooms').select('game_state')
-      ]);
-      const t = tourneysRes.data || [];
-      const r = roomsRes.data || [];
+      const res = await fetch('/api/stats?raw=1');
+      const raw = await res.json();
+      if (!res.ok) throw new Error(raw.error);
+      const t = raw.tournaments || [];
+      const r = raw.game_rooms || [];
       setTournamentStats({
         total: t.length,
         running: t.filter(x => x.status === 'in_progress' || x.status === 'finals').length,

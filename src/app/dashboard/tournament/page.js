@@ -50,29 +50,25 @@ export default function TournamentPage() {
 
     setTournament(tournamentData);
 
-    const { data: leaderboardData, error: leaderboardError } = await supabase
-      .from('leaderboard')
-      .select('*')
-      .eq('tournament_id', tournamentData.id)
-      .order('rank');
+    const lbRes = await fetch(
+      `/api/tournaments?leaderboardFor=${encodeURIComponent(tournamentData.id)}`,
+    );
+    const lbJson = await lbRes.json();
+    if (!lbRes.ok) throw new Error(lbJson.error);
+    const leaderboardData = lbJson.leaderboard || [];
 
-    if (leaderboardError) throw leaderboardError;
-
-    setLeaderboard(leaderboardData || []);
+    setLeaderboard(leaderboardData);
     calculateStats(tournamentData, leaderboardData || []);
   };
 
   const fetchTournament = async () => {
     setLoading(true);
     try {
-      const { data: tournamentsData, error: tournamentsError } = await supabase
-        .from('tournament')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const tourRes = await fetch('/api/tournaments?full=1');
+      const tourJson = await tourRes.json();
+      if (!tourRes.ok) throw new Error(tourJson.error);
 
-      if (tournamentsError) throw tournamentsError;
-
-      const list = tournamentsData || [];
+      const list = tourJson.tournaments || [];
       setTournaments(list);
 
       const selectedTournament =
@@ -177,12 +173,13 @@ export default function TournamentPage() {
         tournament_result_time: formData.tournament_result_time
       };
       
-      const { data, error } = await supabase
-        .from('tournament')
-        .insert([insertData])
-        .select();
-      
-      if (error) throw error;
+      const createRes = await fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(insertData),
+      });
+      const createJson = await createRes.json();
+      if (!createRes.ok) throw new Error(createJson.error);
       
       setShowCreateModal(false);
       resetForm();
@@ -197,12 +194,13 @@ export default function TournamentPage() {
   const handleUpdate = async () => {
     if (!tournament) return;
     try {
-      const { error } = await supabase
-        .from('tournament')
-        .update(formData)
-        .eq('id', tournament.id);
-      
-      if (error) throw error;
+      const patchRes = await fetch('/api/tournaments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tournament.id, ...formData }),
+      });
+      const patchJson = await patchRes.json();
+      if (!patchRes.ok) throw new Error(patchJson.error);
       
       setShowEditModal(false);
       resetForm();
@@ -218,12 +216,12 @@ export default function TournamentPage() {
     if (!tournamentData || !confirm('Are you sure you want to delete this tournament? This will also delete all leaderboard data.')) return;
     
     try {
-      const { error } = await supabase
-        .from('tournament')
-        .delete()
-        .eq('id', tournamentData.id);
-      
-      if (error) throw error;
+      const delRes = await fetch(
+        `/api/tournaments?id=${encodeURIComponent(tournamentData.id)}`,
+        { method: 'DELETE' },
+      );
+      const delJson = await delRes.json();
+      if (!delRes.ok) throw new Error(delJson.error);
       
       fetchTournament();
       alert('Tournament deleted successfully!');

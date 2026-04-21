@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function ReportsPage() {
     const [reports, setReports] = useState([]);
@@ -13,13 +12,10 @@ export default function ReportsPage() {
     const fetchReports = useCallback(async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('reports')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setReports(data || []);
+            const res = await fetch('/api/admin/reports');
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error);
+            setReports(json.reports || []);
         } catch (err) {
             console.error('Error fetching reports:', err);
         } finally {
@@ -35,8 +31,9 @@ export default function ReportsPage() {
         if (!confirm('Are you sure you want to delete this report? This action cannot be undone.')) return;
         setDeletingId(id);
         try {
-            const { error } = await supabase.from('reports').delete().eq('id', id);
-            if (error) throw error;
+            const res = await fetch(`/api/admin/reports?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error);
             setReports((prev) => prev.filter((r) => r.id !== id));
             if (selectedReport?.id === id) setSelectedReport(null);
         } catch (err) {

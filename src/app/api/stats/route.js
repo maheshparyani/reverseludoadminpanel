@@ -6,8 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url);
+
     // Get user stats
     const { data: users, error: usersError } = await supabase.from('users').select('*');
     if (usersError) throw usersError;
@@ -19,6 +21,14 @@ export async function GET() {
     // Get game rooms stats
     const { data: gameRooms, error: gameRoomsError } = await supabase.from('game_rooms').select('*');
     if (gameRoomsError) throw gameRoomsError;
+
+    if (searchParams.get('raw') === '1') {
+      return NextResponse.json({
+        users: users || [],
+        tournaments: tournaments || [],
+        game_rooms: gameRooms || [],
+      });
+    }
 
     // Calculate stats
     const userStats = {

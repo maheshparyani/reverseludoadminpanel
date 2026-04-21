@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function StatisticsPage() {
   const [stats, setStats] = useState(null);
@@ -15,18 +14,16 @@ export default function StatisticsPage() {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const [tourneysRes, usersRes, roomsRes] = await Promise.all([
-        supabase.from('tournaments').select('*'),
-        supabase.from('users').select('*'),
-        supabase.from('game_rooms').select('*')
-      ]);
-      
-      setTournaments(tourneysRes.data || []);
-      setUsers(usersRes.data || []);
-      
-      const t = tourneysRes.data || [];
-      const u = usersRes.data || [];
-      const r = roomsRes.data || [];
+      const statsRes = await fetch('/api/stats?raw=1');
+      const raw = await statsRes.json();
+      if (!statsRes.ok) throw new Error(raw.error);
+
+      const t = raw.tournaments || [];
+      const u = raw.users || [];
+      const r = raw.game_rooms || [];
+
+      setTournaments(t);
+      setUsers(u);
 
       setStats({
         users: {

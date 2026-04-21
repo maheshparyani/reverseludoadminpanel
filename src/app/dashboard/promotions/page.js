@@ -32,13 +32,10 @@ export default function PromotionsPage() {
 
   async function loadPromotions() {
     try {
-      const { data, error } = await supabase
-        .from('promotion_apps')
-        .select('*')
-        .order('display_order', { ascending: true });
-
-      if (error) throw error;
-      setPromotions(data || []);
+      const res = await fetch('/api/admin/promotion-apps');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setPromotions(json.promotions || []);
     } catch (error) {
       console.error('Error loading promotions:', error);
     } finally {
@@ -112,18 +109,21 @@ export default function PromotionsPage() {
     
     try {
       if (editingPromotion) {
-        const { error } = await supabase
-          .from('promotion_apps')
-          .update(formData)
-          .eq('id', editingPromotion.id);
-
-        if (error) throw error;
+        const res = await fetch('/api/admin/promotion-apps', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingPromotion.id, ...formData }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error);
       } else {
-        const { error } = await supabase
-          .from('promotion_apps')
-          .insert([formData]);
-
-        if (error) throw error;
+        const res = await fetch('/api/admin/promotion-apps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error);
       }
 
       resetForm();
@@ -145,12 +145,11 @@ export default function PromotionsPage() {
     if (!confirm('Are you sure you want to delete this promotion?')) return;
 
     try {
-      const { error } = await supabase
-        .from('promotion_apps')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/admin/promotion-apps?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
       loadPromotions();
     } catch (error) {
       console.error('Error deleting promotion:', error);
@@ -159,12 +158,13 @@ export default function PromotionsPage() {
 
   async function toggleActive(promotion) {
     try {
-      const { error } = await supabase
-        .from('promotion_apps')
-        .update({ is_active: !promotion.is_active })
-        .eq('id', promotion.id);
-
-      if (error) throw error;
+      const res = await fetch('/api/admin/promotion-apps', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: promotion.id, is_active: !promotion.is_active }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
       loadPromotions();
     } catch (error) {
       console.error('Error toggling promotion:', error);
