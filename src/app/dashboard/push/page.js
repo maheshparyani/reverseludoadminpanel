@@ -102,6 +102,8 @@ export default function PushNotificationsPage() {
   const [tokenPage, setTokenPage] = useState(1);
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenError, setTokenError] = useState(null);
+  /** userId while DELETE /api/push/device-tokens is in flight */
+  const [tokenDeletingUserId, setTokenDeletingUserId] = useState(null);
 
   /** null = loading — from GET /api/push/config (includes backend health probe) */
   const [pushConfig, setPushConfig] = useState(null);
@@ -244,6 +246,46 @@ export default function PushNotificationsPage() {
       cancelled = true;
     };
   }, [tab, tokenPage]);
+
+  async function reloadDeviceTokensPage() {
+    const qs = new URLSearchParams({
+      page: String(tokenPage),
+      pageSize: String(TABLE_PAGE_SIZE),
+    });
+    const res = await fetch(`/api/push/device-tokens?${qs}`);
+    const json = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(json?.error || 'Failed to reload tokens');
+    setTokenRows(json?.tokens || []);
+    setTokenTotal(
+      typeof json?.total === 'number' ? json.total : (json?.tokens || []).length
+    );
+  }
+
+  async function clearDeviceTokenForUser(userId, username) {
+    const label = username?.trim() || userId;
+    if (
+      !window.confirm(
+        `Remove stored FCM token for "${label}"? Push will not reach this device until they open the app again.`
+      )
+    ) {
+      return;
+    }
+    setTokenDeletingUserId(userId);
+    try {
+      const res = await fetch('/api/push/device-tokens', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const json = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(json?.error || 'Failed to remove token');
+      await reloadDeviceTokensPage();
+    } catch (e) {
+      alert(e.message || 'Remove failed');
+    } finally {
+      setTokenDeletingUserId(null);
+    }
+  }
 
   useEffect(() => {
     if (tab !== 'notifications' || pushHistoryLoading) return;
@@ -759,6 +801,9 @@ export default function PushNotificationsPage() {
                     </th>
                     <th className="px-4 py-3 font-medium">User ID</th>
                     <th className="px-4 py-3 font-medium">Platform</th>
+                    <th className="px-4 py-3 font-medium w-[100px] text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
@@ -777,6 +822,23 @@ export default function PushNotificationsPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-400">
                         {row.platform || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          disabled={
+                            !!tokenDeletingUserId ||
+                            tokenLoading
+                          }
+                          onClick={() =>
+                            clearDeviceTokenForUser(row.userId, row.username)
+                          }
+                          className="px-2.5 py-1 text-xs font-medium rounded-md bg-red-900/50 text-red-300 border border-red-700/60 hover:bg-red-800/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {tokenDeletingUserId === row.userId
+                            ? 'Removing…'
+                            : 'Remove'}
+                        </button>
                       </td>
                     </tr>
                   ))}
